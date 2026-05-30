@@ -1,0 +1,524 @@
+#!/bin/bash
+
+# Paths to the directories where log files are saved
+declare -a pathsToLogFileDirectories=("logs")
+
+# Paths to the directories where configuration files are loaded from
+# Multiple configurations can be specified, the yt-dlp command will be run for each config file
+declare -a pathsToLvasConfigFiles=("configurations/youtube/lvas-config")
+
+# Template to use for naming downloads
+downloadedContentFilenameTemplate="%(uploader,webpage_url_basename)s [%(uploader_url,webpage_url)s]/%(album&{}|)s/%(artist,creator&{} - |)s%(track_number&{} |)s%(title)s%(upload_date>%Y-%m-%d,release_date>%Y-%m-%d& [{}]|)s.%(ext)s"
+
+# Template to use for naming logs (resolved using printf)
+logFileBasename="lvas-log.txt"
+
+# The printf template used for timestamps added to log file and config file backup filenames
+timestampTemplate="[%(%Y-%m-%d)T]"
+
+# File retention count for saved copies of configuration files
+configFileBackupRetentionCount=30
+
+# File retention count for log files
+logFileRetentionCount=30
+
+# The yt-dlp release channel that should be targeted when checking for updates
+# Valid release channel options are 'stable', 'nightly', and 'master' ('nightly' is recommeneded)
+# Set to an empty value ("") to disable checking for updates before running yt-dlp
+# (see https://github.com/yt-dlp/yt-dlp#update for more info)
+targetReleaseChannel="nightly"
+
+
+
+# Change directory to the directory where the script is located (filepaths given in this file are checked relative to where lvas file is located)
+cd "$(dirname ${BASH_SOURCE[0]})"
+
+# Save the current directory in $absolutePathToLvasScriptDirectory
+absolutePathToLvasScriptDirectory="$(pwd)"
+
+
+
+# If any of the log file directories has not been created yet, log an error and exit the script
+for pathToLogFilesDirectory in "${pathsToLogFileDirectories[@]}";
+do
+    if [ ! -d "$pathToLogFilesDirectory" ]; then
+        echo "The directory specified by 'pathsToLogFileDirectories=(...$pathToLogFilesDirectory...)' was not found, please ensure '$pathToLogFilesDirectory' exists and re-run script."
+        exit 1
+    fi
+done
+
+# Resolve log file filepaths to absolute paths
+declare -a absolutePathsToLogFileDirectories="("$(readlink -f "${pathsToLogFileDirectories[@]}" | awk '{print "\""$0"\""}')")"
+
+# Printf the log file template and write the result to the 'logFileBasenameWithTimestamp' variable
+# -1 argument tells printf to default to explicit current date, not shell start time
+if [[ $logFileBasename == *"."* ]]; then
+    printf -v "logFileBasenameWithTimestamp" ""${logFileBasename%.*}" "$timestampTemplate"."${logFileBasename##*.}"" -1
+else
+    printf -v "logFileBasenameWithTimestamp" ""$logFileBasename" "$timestampTemplate"" -1
+fi
+
+
+
+# If any of the configuration files have not been created yet, log an error and exit the script
+for pathToLvasConfigFile in "${pathsToLvasConfigFiles[@]}";
+do
+    if [ ! -f "$pathToLvasConfigFile" ]; then
+        echo "The file specified by 'pathsToLvasConfigFiles=(...$pathToLvasConfigFile...)' was not found, please ensure '$pathToLvasConfigFile' exists and re-run script." \
+            2>&1 | ts 2>&1 | tee -a "${absolutePathsToLogFileDirectories[@]/%//$logFileBasenameWithTimestamp}" 2>&1
+        exit 1
+    fi
+done
+
+
+
+# Iterate through configuration files (verify all filepaths)
+for pathToLvasConfigFile in "${pathsToLvasConfigFiles[@]}";
+do
+
+    # Source configuration file
+    . "$pathToLvasConfigFile"
+
+    
+
+    # Paths in configuration files are checked relative to where the configuration file is located
+    cd "$(dirname "$pathToLvasConfigFile")"
+
+
+
+    # If any of the config file backup directories has not been created yet, log an error and exit the script
+    for pathToConfigBackupDirectory in "${pathsToConfigBackupDirectories[@]}";
+    do
+        if [ ! -d "$pathToConfigBackupDirectory" ]; then
+            echo "The directory specified by 'pathsToConfigBackupDirectories=(...$pathToConfigBackupDirectory...)' in '$pathToLvasConfigFile' was not found, please ensure '$pathsToConfigBackupDirectories' exists and re-run script." \
+                2>&1 | ts 2>&1 | tee -a "${absolutePathsToLogFileDirectories[@]/%//$logFileBasenameWithTimestamp}" 2>&1
+            exit 1
+        fi
+    done
+
+
+
+    # If the batch file path is not specified or it has not been created yet, log an error and exit the script
+    if [ -z "$pathToBatchFile" ]; then
+        echo "The path to the yt-dlp batch file was not specified in '$pathToLvasConfigFile', please ensure a valid path is set with 'pathToBatchFile=example/path/to/batch/file' and re-run the script." \
+            2>&1 | ts 2>&1 | tee -a "${absolutePathsToLogFileDirectories[@]/%//$logFileBasenameWithTimestamp}" 2>&1
+        exit 1
+    elif [ ! -f "$pathToBatchFile" ]; then
+        echo "The yt-dlp batch file specified by 'pathToBatchFile=$pathToBatchFile' in '$pathToLvasConfigFile' was not found, please ensure '$pathToBatchFile' exists and re-run script." \
+            2>&1 | ts 2>&1 | tee -a "${absolutePathsToLogFileDirectories[@]/%//$logFileBasenameWithTimestamp}" 2>&1
+        exit 1
+    fi
+
+    # If the yt-dlp config file path is not specified or it has not been created yet, log an error and exit the script
+    if [ -z "$pathToYtDlpConfigFile" ]; then
+        echo "The path to the yt-dlp config file was not specified in '$pathToLvasConfigFile', please ensure a valid path is set with 'pathToYtDlpConfigFile=example/path/to/yt-dlp-config/file' and re-run the script." \
+            2>&1 | ts 2>&1 | tee -a "${absolutePathsToLogFileDirectories[@]/%//$logFileBasenameWithTimestamp}" 2>&1
+        exit 1
+    elif [ ! -f "$pathToYtDlpConfigFile" ]; then
+        echo "The yt-dlp config file specified by 'pathToYtDlpConfigFile=$pathToYtDlpConfigFile' in '$pathToLvasConfigFile' was not found, please ensure '$pathToYtDlpConfigFile' exists and re-run script." \
+            2>&1 | ts 2>&1 | tee -a "${absolutePathsToLogFileDirectories[@]/%//$logFileBasenameWithTimestamp}" 2>&1
+        exit 1
+    fi
+
+    # If downloads directory path is not specified or it has not been created yet, log an error and exit the script
+    if [ -z "$pathToDownloadsDirectory" ]; then
+        echo "The path to the downloads directory was not specified in '$pathToLvasConfigFile', please ensure a valid path is set with 'pathToDownloadsDirectory=example/path/to/downloads/directory' and re-run the script." \
+            2>&1 | ts 2>&1 | tee -a "${absolutePathsToLogFileDirectories[@]/%//$logFileBasenameWithTimestamp}" 2>&1
+        exit 1
+    elif [ ! -d "$pathToDownloadsDirectory" ]; then
+        echo "The directory specified by 'pathToDownloadedContentDirectory=$pathToDownloadsDirectory' in '$pathToLvasConfigFile' was not found, please ensure '$pathToDownloadsDirectory' exists and re-run script." \
+            2>&1 | ts 2>&1 | tee -a "${absolutePathsToLogFileDirectories[@]/%//$logFileBasenameWithTimestamp}" 2>&1
+        exit 1
+    fi
+
+
+
+    # If the yt-dlp archive file path is not specified, log an error and exit the script
+    if [ -z "$pathToArchiveFile" ]; then
+        echo "The path to the yt-dlp archive file was not specified in '$pathToConfigurationFile', please ensure a valid path is set with 'pathToArchiveFile=example/path/to/archive/file' and re-run the script." \
+            2>&1 | ts 2>&1 | tee -a "${absolutePathsToLogFileDirectories[@]/%//$logFileBasenameWithTimestamp}" 2>&1
+        exit 1
+    fi
+
+    # If the yt-dlp archive file doesn't exist, create it and continue
+    if [ ! -f "$pathToArchiveFile" ]; then
+        touch "$pathToArchiveFile" 2>&1 | ts 2>&1 | tee -a "${absolutePathsToLogFileDirectories[@]/%//$logFileBasenameWithTimestamp}" 2>&1
+    fi
+
+
+
+    # Change directory to lvasDirectory
+    cd "$absolutePathToLvasScriptDirectory"
+
+
+
+    # Reset config file variables
+    pathToBatchFile=""
+    pathToDownloadsDirectory=""
+    pathToYtDlpConfigFile=""
+    pathToArchiveFile=""
+
+done
+
+
+
+# Update yt-dlp if a newer version is available (this requires running lvas with root/admin permissions)
+# If updating yt-dlp before downloading media is not desired, set 'targetReleaseChannel' in the 'lvas-config' file to an empty value ("")
+if [ "${targetReleaseChannel,,}" = "stable" ] || [ "${targetReleaseChannel,,}" = "nightly" ] || [ "${targetReleaseChannel,,}" = "master" ]; then
+    yt-dlp \
+        --update-to "${targetReleaseChannel,,}" \
+        2>&1 | ts 2>&1 | tee -a "${absolutePathsToLogFileDirectories[@]/%//$logFileBasenameWithTimestamp}" 2>&1
+elif [ -n "$targetReleaseChannel" ]; then
+    echo "The release channel specified by 'targetReleaseChannel=$targetReleaseChannel' does not exist, please ensure 'targetReleaseChannel' is being set to a valid value." \
+        2>&1 | ts 2>&1 | tee -a "${absolutePathsToLogFileDirectories[@]/%//$logFileBasenameWithTimestamp}" 2>&1
+    exit 1
+fi
+
+
+
+# Iterate through configuration files
+for pathToLvasConfigFile in "${pathsToLvasConfigFiles[@]}";
+do
+
+    # Load variables from configuration file
+    . "$pathToLvasConfigFile"
+
+    absolutePathToLvasConfigFile="$(readlink -f "$pathToLvasConfigFile")"
+
+    # Change directory to the configuration file's directory
+    cd "$(dirname "$pathToLvasConfigFile")"
+
+    # Resolve file paths to absolute paths
+    absolutePathToDownloadsDirectory="$(readlink -f "$pathToDownloadsDirectory")"
+    absolutePathToBatchFile="$(readlink -f "$pathToBatchFile")"
+    absolutePathToYtDlpConfigFile="$(readlink -f "$pathToYtDlpConfigFile")"
+    absolutePathToArchiveFile="$(readlink -f "$pathToArchiveFile")"
+
+    # Change directory to lvas script directory
+    cd "$absolutePathToLvasScriptDirectory"
+
+    # Get current date/time as # of seconds since epoch
+    timeYtDlpCommandStarted="$(date "+%s")"
+
+    # yt-dlp command
+    yt-dlp \
+        --batch-file "$absolutePathToBatchFile" \
+        --download-archive "$absolutePathToArchiveFile" \
+        --config-locations "$absolutePathToYtDlpConfigFile" \
+        -o "$absolutePathToDownloadsDirectory/$downloadedContentFilenameTemplate" \
+        2>&1 | ts 2>&1 | tee -a "${absolutePathsToLogFileDirectories[@]/%//$logFileBasenameWithTimestamp}" 2>&1
+
+    cd "$absolutePathToDownloadsDirectory"
+
+    # Generate a new .md5 hash file for any file that was modified after the yt-dlp command was executed
+    find . \
+        -type f \
+        -not -name "*.md5" \
+        -newermt "@$timeYtDlpCommandStarted" \
+        -exec sh -c "md5sum \"\$1\" | tee \"\$1.md5\"" -- "{}" \; \
+        2>&1 | ts 2>&1 | tee -a "${absolutePathsToLogFileDirectories[@]/%//$logFileBasenameWithTimestamp}" 2>&1
+
+    # Change directory to lvas script directory
+    cd "$absolutePathToLvasScriptDirectory"
+
+    # Save a copy of any changed configuration files
+    for pathToConfigBackupDirectory in "${pathsToConfigBackupDirectories[@]}";
+    do
+
+        # Change directory to config file directory
+        cd "$(dirname "$pathToLvasConfigFile")"
+
+
+
+        # Resolve basenames of all config filepaths
+        batchFileBasename="$(basename "$pathToBatchFile")"
+        archiveFileBasename="$(basename "$pathToArchiveFile")"
+        ytDlpConfigFileBasename="$(basename "$pathToYtDlpConfigFile")"
+        lvasConfigFileBasename="$(basename "$pathToLvasConfigFile")"
+
+        # Resolve backup file directories
+        pathToBatchFileBackupDirectory="$pathToConfigBackupDirectory/$batchFileBasename"
+        pathToArchiveFileBackupDirectory="$pathToConfigBackupDirectory/$archiveFileBasename"
+        pathToYtDlpConfigFileBackupDirectory="$pathToConfigBackupDirectory/$ytDlpConfigFileBasename"
+        pathToLvasConfigFileBackupDirectory="$pathToConfigBackupDirectory/$lvasConfigFileBasename"
+
+
+
+        # If the batch file backup directory doesn't exist, create it and continue
+        if [ ! -d "$pathToBatchFileBackupDirectory" ]; then
+            mkdir "$pathToBatchFileBackupDirectory"
+        fi
+
+        # If the archive file backup directory doesn't exist, create it and continue
+        if [ ! -d "$pathToArchiveFileBackupDirectory" ]; then
+            mkdir "$pathToArchiveFileBackupDirectory"
+        fi
+
+        # If the yt-dlp config file backup directory doesn't exist, create it and continue
+        if [ ! -d "$pathToYtDlpConfigFileBackupDirectory" ]; then
+            mkdir "$pathToYtDlpConfigFileBackupDirectory"
+        fi
+
+        # If the lvas config file backup directory doesn't exist, create it and continue
+        if [ ! -d "$pathToLvasConfigFileBackupDirectory" ]; then
+            mkdir "$pathToLvasConfigFileBackupDirectory"
+        fi
+
+
+
+        # Get the most recently created batch file backup
+        mostRecentBatchFileBackup="$(find "$pathToBatchFileBackupDirectory" \
+            -maxdepth 1 \
+            -type f \
+            -not -name ".gitignore" \
+            -printf "%T@ %p\n" \
+            | sort -n \
+            | cut -d' ' -f 2- \
+            | tail -n 1)"
+
+        # If there's no backup, or the current batch file is not the same as the last saved batch file backup, save a new copy
+        if [ -z "$mostRecentBatchFileBackup" ] || ! cmp -s "$mostRecentBatchFileBackup" "$absolutePathToBatchFile"; then
+
+            # If filename contains file extension, add timestamp before extension
+            if [[ "$batchFileBasename" == *"."* ]]; then
+                printf -v batchFileBasenameWithTimestamp ""${batchFileBasename%.*}" "$timestampTemplate"."${batchFileBasename##*.}"" -1
+            else
+                printf -v batchFileBasenameWithTimestamp ""$batchFileBasename" "$timestampTemplate"" -1
+            fi
+
+            # Copy current batch file to new timestamped batch ackup file
+            cp -v "$absolutePathToBatchFile" "$pathToBatchFileBackupDirectory/$batchFileBasenameWithTimestamp" \
+                2>&1 | ts 2>&1 | tee -a "${absolutePathsToLogFileDirectories[@]/%//$logFileBasenameWithTimestamp}" 2>&1
+
+            # Count number of batch backup files
+            batchFileBackupCount="$(find "$pathToBatchFileBackupDirectory" -maxdepth 1 -type f -not -name ".gitignore" | wc -l)"
+
+            # If the new number of backup files is greater than the config file retention count,
+            # Delete the oldest (modified longest ago) file
+            while [ "$batchFileBackupCount" -gt "$configFileBackupRetentionCount" ]; do
+
+                # Get oldest batch backup file
+                oldestBatchFileBackup="$(find "$pathToBatchFileBackupDirectory" \
+                    -maxdepth 1 \
+                    -type f \
+                    -not -name ".gitignore" \
+                    -printf "%T@ %p\n" \
+                    | sort -n \
+                    | cut -d' ' -f 2- \
+                    | head -n 1)"
+
+                # Remove oldest batch backup file
+                rm -v -f "$oldestBatchFileBackup" \
+                    2>&1 | ts 2>&1 | tee -a "${absolutePathsToLogFileDirectories[@]/%//$logFileBasenameWithTimestamp}" 2>&1
+
+                # Decrement batch backup file count
+                ((batchFileBackupCount--))
+
+            done
+
+        fi
+
+
+
+        # Get the most recently changed archive file backup
+        mostRecentArchiveFileBackup="$(find "$pathToArchiveFileBackupDirectory" \
+            -maxdepth 1 \
+            -type f \
+            -not -name ".gitignore" \
+            -printf "%T@ %p\n" \
+            | sort -n \
+            | cut -d' ' -f 2- \
+            | tail -n 1)"
+
+        # If there's no backup, or the current archive file is not the same as the last saved archive file backup, save a new copy
+        if [ -z "$mostRecentArchiveFileBackup" ] || ! cmp -s "$mostRecentArchiveFileBackup" "$absolutePathToArchiveFile"; then
+
+            # If filename contains file extension, add timestamp before extension
+            if [[ "$archiveFileBasename" == *"."* ]]; then
+                printf -v "archiveFileBasenameWithTimestamp" ""${archiveFileBasename%.*}" "$timestampTemplate"."${archiveFileBasename##*.}"" -1
+            else
+                printf -v "archiveFileBasenameWithTimestamp" ""$archiveFileBasename" "$timestampTemplate"" -1
+            fi
+
+            # Copy current archive file to new timestamped archive backup file
+            cp -v "$absolutePathToArchiveFile" "$pathToArchiveFileBackupDirectory/$archiveFileBasenameWithTimestamp" \
+                2>&1 | ts 2>&1 | tee -a "${absolutePathsToLogFileDirectories[@]/%//$logFileBasenameWithTimestamp}" 2>&1
+
+        fi
+
+        # Count number of archive backup files
+        archiveFileBackupCount="$(find "$pathToArchiveFileBackupDirectory" -maxdepth 1 -type f -not -name ".gitignore" | wc -l)"
+
+        # If the new number of backup files is greater than the config file retention count,
+        # Delete the oldest (modified longest ago) file
+        while [ "$archiveFileBackupCount" -gt "$configFileBackupRetentionCount" ]; do
+
+            # Get oldest archive backup file
+            oldestArchiveFileBackup="$(find "$pathToArchiveFileBackupDirectory" \
+                -maxdepth 1 \
+                -type f \
+                -not -name ".gitignore" \
+                -printf "%T@ %p\n" \
+                | sort -n \
+                | cut -d' ' -f 2- \
+                | head -n 1)"
+
+            # Remove oldest archive backup file
+            rm -v -f "$oldestArchiveFileBackup" \
+                2>&1 | ts 2>&1 | tee -a "${absolutePathsToLogFileDirectories[@]/%//$logFileBasenameWithTimestamp}" 2>&1
+
+            # Decrement archive backup file count
+            ((archiveFileBackupCount--))
+
+        done
+
+
+
+        # Get the most recently changed yt-dlp config file backup
+        mostRecentYtDlpConfigFileBackup="$(find "$pathToYtDlpConfigFileBackupDirectory" \
+            -maxdepth 1 \
+            -type f \
+            -not -name ".gitignore" \
+            -printf "%T@ %p\n" \
+            | sort -n \
+            | cut -d' ' -f 2- \
+            | tail -n 1)"
+
+        # If there's no backup, or the current yt-dlp config file is not the same as the last saved yt-dlp config file backup, save a new copy
+        if [ -z "$mostRecentYtDlpConfigFileBackup" ] || ! cmp -s "$mostRecentYtDlpConfigFileBackup" "$absolutePathToYtDlpConfigFile"; then
+
+            # If filename contains file extension, add timestamp before extension
+            if [[ "$ytDlpConfigFileBasename" == *"."* ]]; then
+                printf -v ytDlpConfigFileBasenameWithTimestamp ""${ytDlpConfigFileBasename%.*}" "$timestampTemplate"."${ytDlpConfigFileBasename##*.}"" -1
+            else
+                printf -v ytDlpConfigFileBasenameWithTimestamp ""$ytDlpConfigFileBasename" "$timestampTemplate"" -1
+            fi
+
+            # Copy current yt-dlp config file to new timestamped yt-dlp config backup file
+            cp -v "$absolutePathToYtDlpConfigFile" "$pathToYtDlpConfigFileBackupDirectory/$ytDlpConfigFileBasenameWithTimestamp" \
+                2>&1 | ts 2>&1 | tee -a "${absolutePathsToLogFileDirectories[@]/%//$logFileBasenameWithTimestamp}" 2>&1
+
+        fi
+
+        # Count number of yt-dlp config backup files
+        ytDlpConfigFileBackupCount="$(find "$pathToYtDlpConfigFileBackupDirectory" -maxdepth 1 -type f -not -name ".gitignore" | wc -l)"
+
+        # If the new number of backup files is greater than the config file retention count,
+        # Delete the oldest (modified longest ago) file
+        while [ "$ytDlpConfigFileBackupCount" -gt "$configFileBackupRetentionCount" ]; do
+
+            # Get oldest yt-dlp config backup file
+            oldestYtDlpConfigFileBackup="$(find "$pathToYtDlpConfigFileBackupDirectory" \
+                -maxdepth 1 \
+                -type f \
+                -not -name ".gitignore" \
+                -printf "%T@ %p\n" \
+                | sort -n \
+                | cut -d' ' -f 2- \
+                | head -n 1)"
+
+            # Remove oldest yt-dlp config backup file
+            rm -v -f "$oldestYtDlpConfigFileBackup" \
+                2>&1 | ts 2>&1 | tee -a "${absolutePathsToLogFileDirectories[@]/%//$logFileBasenameWithTimestamp}" 2>&1
+
+            # Decrement yt-dlp config backup file count
+            ((ytDlpConfigFileBackupCount--))
+
+        done
+
+
+
+        # Get the most recently changed lvas config file backup
+        mostRecentLvasConfigFileBackup="$(find "$pathToLvasConfigFileBackupDirectory" \
+            -maxdepth 1 \
+            -type f \
+            -not -name ".gitignore" \
+            -printf "%T@ %p\n" \
+            | sort -n \
+            | cut -d' ' -f 2- \
+            | tail -n 1)"
+
+        # If there's no backup, or the current configuration file is not the same as the last saved configuration file backup, save a new copy
+        if [ -z "$mostRecentLvasConfigFileBackup" ] || ! cmp -s "$mostRecentLvasConfigFileBackup" "$absolutePathToLvasConfigFile"; then
+
+            # If filename contains file extension, add timestamp before extension
+            if [[ "$lvasConfigFileBasename" == *"."* ]]; then
+                printf -v lvasConfigFileBasenameWithTimestamp ""${lvasConfigFileBasename%.*}" "$timestampTemplate"."${lvasConfigFileBasename##*.}"" -1
+            else
+                printf -v lvasConfigFileBasenameWithTimestamp ""$lvasConfigFileBasename" "$timestampTemplate"" -1
+            fi
+
+            # Copy current lvas config file to new timestamped lvas config backup file
+            cp -v "$absolutePathToLvasConfigFile" "$pathToLvasConfigFileBackupDirectory/$lvasConfigFileBasenameWithTimestamp" \
+                2>&1 | ts 2>&1 | tee -a "${absolutePathsToLogFileDirectories[@]/%//$logFileBasenameWithTimestamp}" 2>&1
+
+        fi
+
+        # Count number of lvas config backup files
+        lvasConfigFileBackupCount="$(find "$pathToLvasConfigFileBackupDirectory" -maxdepth 1 -type f -not -name ".gitignore" | wc -l)"
+
+        # If the new number of backup files is greater than the config file retention count,
+        # Delete the oldest (modified longest ago) file
+        while [ "$lvasConfigFileBackupCount" -gt "$configFileBackupRetentionCount" ]; do
+
+            # Get oldest lvas config backup file
+            oldestLvasConfigFileBackup="$(find "$pathToLvasConfigFileBackupDirectory" \
+                -maxdepth 1 \
+                -type f \
+                -not -name ".gitignore" \
+                -printf "%T@ %p\n" \
+                | sort -n \
+                | cut -d' ' -f 2- \
+                | head -n 1)"
+
+            # Remove oldest lvas config backup file
+            rm -v -f "$oldestLvasConfigFileBackup" \
+                2>&1 | ts 2>&1 | tee -a "${absolutePathsToLogFileDirectories[@]/%//$logFileBasenameWithTimestamp}" 2>&1
+
+            # Decrement lvas config backup file count
+            ((lvasConfigFileBackupCount--))
+
+        done
+
+
+
+        # Change directory to lvas script directory
+        cd "$absolutePathToLvasScriptDirectory"
+
+    done
+
+done
+
+
+
+# Remove oldest log file if log file count is over log file retention count
+for pathToLogFilesDirectory in "${absolutePathsToLogFileDirectories[@]}";
+do
+
+    # Count number of log files
+    logFileCount="$(find "$pathToLogFilesDirectory" -maxdepth 1 -type f -not -name ".gitignore" | wc -l)"
+
+    # If the new number of log files is greater than the log file retention count,
+    # Delete the oldest (modified longest ago) files until the count is within limit
+    while [ "$logFileCount" -gt "$logFileRetentionCount" ]; do
+
+        # Get oldest log file
+        oldestLogFile="$(find "$pathToLogFilesDirectory" \
+            -maxdepth 1 \
+            -type f \
+            -not -name ".gitignore" \
+            -printf "%T@ %p\n" \
+            | sort -n \
+            | cut -d' ' -f 2- \
+            | head -n 1)"
+
+        # Remove oldest log file
+        rm -v -f "$oldestLogFile" \
+            2>&1 | ts 2>&1 | tee -a "${absolutePathsToLogFileDirectories[@]/%//$logFileBasenameWithTimestamp}" 2>&1
+
+        # Decrement log file count
+        ((logFileCount--))
+
+    done
+
+done

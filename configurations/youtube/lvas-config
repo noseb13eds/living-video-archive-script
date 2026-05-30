@@ -1,0 +1,26 @@
+#!/bin/bash
+
+# This file sets variables used with this configuration
+# The variables set here determine various filepaths
+# Lines starting with "#" are comments
+
+# Paths to configuration file backup directories
+declare -a pathsToConfigBackupDirectories=("backups")
+
+# Path to the directory where downloads are saved
+pathToDownloadsDirectory="../../downloads"
+
+# Path to the yt-dlp config file used with the '--config-locations' switch
+# This file contains most of the additional switches that get applied to yt-dlp
+pathToYtDlpConfigFile="yt-dlp-config"
+
+# Path to the yt-dlp archive file used with the '--download-archive' option
+# IDs of any newly downloaded content will be saved to this file,
+# and any videos with IDs already present will not be downloaded again
+# (see https://github.com/yt-dlp/yt-dlp#video-selection for more info)
+pathToArchiveFile="archive"
+
+# Path to the yt-dlp batch file used with the '--batch-file' option
+# Content will be downloaded from URLs listed in this file
+# (see "https://github.com/yt-dlp/yt-dlp#filesystem-options" for more info)
+pathToBatchFile="batch"

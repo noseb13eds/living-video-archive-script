@@ -1,0 +1,80 @@
+# This file configures yt-dlp
+# Any valid switches in this file will be applied to yt-dlp
+# Lines starting with "#" are comments, and will NOT be applied
+# See "https://github.com/yt-dlp/yt-dlp#usage-and-options" for a full list of available switches
+
+# Format specifier (targets best quality video/audio while de-prioritizing AI-upscaled content)
+# '!*=' means 'does not contain'
+# '?' means that a format will not be ignored if it doesn't have a 'format_note' field
+# See "https://github.com/yt-dlp/yt-dlp/issues/15325" for more info on AI-upscaled content
+--format 'bv*[format_note!*=?AI-upscaled]+ba[format_note!*=?AI-upscaled]/b[format_note!*=?AI-upscaled]'
+
+# Number of seconds to sleep between individual requests during data extraction
+--sleep-requests 2
+
+# Number of seconds to sleep before each subtitle download
+--sleep-subtitles 5
+
+# Minimum number of seconds to sleep before each download.
+# The actual number of seconds slept will be randomly chosen between this number and --max-sleep-interval
+--min-sleep-interval 20
+
+# Maximum number of seconds to sleep before each download.
+# The actual number of seconds slept will be randomly chosen between this number and --min-sleep-interval
+--max-sleep-interval 65
+
+# Number of files to download before aborting the command
+--max-downloads 1
+
+# Write video metadata to a seperate info.json file
+--write-info-json
+
+# Write subtitles to its own file on disk
+--write-subs
+
+# Write thumbnail to its own file on disk
+--write-thumbnail
+
+# Embed the info.json file to the video file as an attachment
+--embed-info-json
+
+# Embed subtitles to the video file (only applies to mp4, webm and mkv videos)
+--embed-subs
+
+# Embed thumbnail in the video as cover art
+--embed-thumbnail
+
+# Embed chapter markers in the video file
+--embed-chapters
+
+# Embed metadata to the video file
+--embed-metadata
+
+# Modifies "--max-downloads" to apply for each URL individually instead of the entire queue
+--break-per-input
+
+# Disables falling back to next available format if the highest quality format cannot be downloaded
+--no-check-formats
+
+# Abort the command if an error occurs while downloading (prevents continuing to attempt downloads if there is an issue)
+--abort-on-error
+
+# Limits the download rate to 2mb a second (helps avoid bot detection)
+--limit-rate 2M
+
+# Mark videos as watched (helps avoid bot detection)
+--mark-watched
+
+# Log full debugging output
+--verbose
+
+# The name of the browser to load cookies from (avoids bot detection/provides better access to certain content)
+# Will need to be logged into the desired accounts on the target browser for this to do anything
+# See "https://github.com/yt-dlp/yt-dlp/#filesystem-options" for a list of supported browsers
+--cookies-from-browser "firefox"
+
+# The user client to impersonate for requests (helps avoid bot detection for certain websites)
+# Running "yt-dlp --list-impersonate-targets" will list all available targets
+# See "https://github.com/yt-dlp/yt-dlp/#network-options" for a list of supported clients
+--impersonate "firefox-135"
+
