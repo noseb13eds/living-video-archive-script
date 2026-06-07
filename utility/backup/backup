@@ -1,0 +1,91 @@
+#!/bin/bash
+
+# Paths to the directories where log files are saved
+declare -a pathsToLogFileDirectories=("logs")
+
+# Template to use for naming logs (resolved using printf)
+logFileBasename="lvas-backup-log.txt"
+
+# The printf template used for timestamps added to log file and config file backup filenames
+timestampTemplate="[%(%Y-%m-%d)T]"
+
+# File retention count for log files
+logFileRetentionCount=30
+
+
+
+# Change directory to the directory where the script is located (filepaths given in this file are checked relative to where "backup" file is located)
+cd "$(dirname ${BASH_SOURCE[0]})"
+
+
+
+# If any of the log file directories has not been created yet, log an error and exit the script
+for pathToLogFilesDirectory in "${pathsToLogFileDirectories[@]}";
+do
+    if [ ! -d "$pathToLogFilesDirectory" ]; then
+        echo "The directory specified by 'pathsToLogFileDirectories=(...$pathToLogFilesDirectory...)' was not found, please ensure '$pathToLogFilesDirectory' exists and re-run script."
+        exit 1
+    fi
+done
+
+# Resolve log file filepaths to absolute paths
+declare -a absolutePathsToLogFileDirectories="("$(readlink -f "${pathsToLogFileDirectories[@]}" | awk '{print "\""$0"\""}')")"
+
+# Printf the log file template and write the result to the 'logFileBasenameWithTimestamp' variable
+# -1 argument tells printf to default to explicit current date, not shell start time
+if [[ $logFileBasename == *"."* ]]; then
+    printf -v "logFileBasenameWithTimestamp" ""${logFileBasename%.*}" "$timestampTemplate"."${logFileBasename##*.}"" -1
+else
+    printf -v "logFileBasenameWithTimestamp" ""$logFileBasename" "$timestampTemplate"" -1
+fi
+
+
+# Directory to copy files FROM
+sourceDirectory="../../downloads"
+
+# Directory to copy files TO
+destinationDirectory=""
+
+
+
+# rsync command
+# a: archive mode
+# v: verbose
+# P: same as --partial and --progress
+# h: use human-readable numbers
+# --info=all4: detailed log output
+rsync -avPh --info=all4 "$sourceDirectory" "$destinationDirectory"
+
+
+
+# Remove oldest log file if log file count is over log file retention count
+for pathToLogFilesDirectory in "${absolutePathsToLogFileDirectories[@]}";
+do
+
+    # Count number of log files
+    logFileCount="$(find "$pathToLogFilesDirectory" -maxdepth 1 -type f -not -name ".gitignore" | wc -l)"
+
+    # If the new number of log files is greater than the log file retention count,
+    # Delete the oldest (modified longest ago) files until the count is within limit
+    while [ "$logFileCount" -gt "$logFileRetentionCount" ]; do
+
+        # Get oldest log file
+        oldestLogFile="$(find "$pathToLogFilesDirectory" \
+            -maxdepth 1 \
+            -type f \
+            -not -name ".gitignore" \
+            -printf "%T@ %p\n" \
+            | sort -n \
+            | cut -d' ' -f 2- \
+            | head -n 1)"
+
+        # Remove oldest log file
+        rm -v -f "$oldestLogFile" \
+            2>&1 | ts 2>&1 | tee -a "${absolutePathsToLogFileDirectories[@]/%//$logFileBasenameWithTimestamp}" 2>&1
+
+        # Decrement log file count
+        ((logFileCount--))
+
+    done
+
+done
