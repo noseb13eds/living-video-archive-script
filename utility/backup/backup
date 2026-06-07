@@ -54,7 +54,8 @@ destinationDirectory=""
 # P: same as --partial and --progress
 # h: use human-readable numbers
 # --info=all4: detailed log output
-rsync -avPh --info=all4 "$sourceDirectory" "$destinationDirectory"
+rsync -avPh --info=all4 "$sourceDirectory" "$destinationDirectory" \
+    2>&1 | ts 2>&1 | tee -a "${absolutePathsToLogFileDirectories[@]/%//$logFileBasenameWithTimestamp}" 2>&1
 
 
 
