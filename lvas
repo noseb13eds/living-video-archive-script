@@ -8,7 +8,7 @@ declare -a pathsToLogFileDirectories=("logs")
 declare -a pathsToLvasConfigFiles=("configurations/youtube/lvas-config")
 
 # Template to use for naming downloads
-downloadedContentFilenameTemplate="%(uploader,webpage_url_basename)s [%(uploader_url,webpage_url)s]/%(album&{}|)s/%(artist,creator&{} - |)s%(track_number&{} |)s%(title)s%(upload_date>%Y-%m-%d,release_date>%Y-%m-%d& [{}]|)s.%(ext)s"
+downloadedContentFilenameTemplate="%(uploader,webpage_url_basename)s [%(uploader_url,webpage_url)s]/%(album&{}|)s/%(artist,creator&{} - |)s%(track_number&{} |)s%(title)s%(id& [{}]|)s.%(ext)s"
 
 # Template to use for naming logs (resolved using printf)
 logFileBasename="lvas-log.txt"
