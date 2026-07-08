@@ -10,18 +10,18 @@
 --format 'bv*[format_note!*=?AI-upscaled]+ba[format_note!*=?AI-upscaled]/b[format_note!*=?AI-upscaled]'
 
 # Number of seconds to sleep between individual requests during data extraction
---sleep-requests 2
+--sleep-requests 5
 
 # Number of seconds to sleep before each subtitle download
---sleep-subtitles 5
+--sleep-subtitles 35
 
 # Minimum number of seconds to sleep before each download.
 # The actual number of seconds slept will be randomly chosen between this number and --max-sleep-interval
---min-sleep-interval 20
+--min-sleep-interval 30
 
 # Maximum number of seconds to sleep before each download.
 # The actual number of seconds slept will be randomly chosen between this number and --min-sleep-interval
---max-sleep-interval 65
+--max-sleep-interval 75
 
 # Number of files to download before aborting the command
 --max-downloads 1
