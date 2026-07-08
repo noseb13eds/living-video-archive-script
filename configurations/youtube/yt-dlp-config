@@ -78,3 +78,21 @@
 # See "https://github.com/yt-dlp/yt-dlp/#network-options" for a list of supported clients
 --impersonate "firefox-135"
 
+--concurrent-fragments 1
+
+--abort-on-unavailable-fragments
+
+--write-playlist-metafiles
+
+--no-continue
+
+--no-ignore-no-formats-error
+
+--no-video-multistreams
+
+--no-audio-multistreams
+
+--no-prefer-free-formats
+
+--no-write-auto-subs
+
