@@ -35,6 +35,9 @@
 # Write thumbnail to its own file on disk
 --write-thumbnail
 
+# Write playlist metadata files
+--write-playlist-metafiles
+
 # Embed the info.json file to the video file as an attachment
 --embed-info-json
 
@@ -65,6 +68,30 @@
 # Mark videos as watched (helps avoid bot detection)
 --mark-watched
 
+# Don't resume partial downloads, always re-download the entire file
+--no-continue
+
+# Throw an error when no downloadable formats are available
+--no-ignore-no-formats-error
+
+# Only allow one video stream to be downloaded per output file
+--no-video-multistreams
+
+# Only allow one audio stream to be downloaded per output file
+--no-audio-multistreams
+
+# Don't give any special preference to free format containers
+--no-prefer-free-formats
+
+# Don't write auto-generated subtitles
+--no-write-auto-subs
+
+# Number of fragments to download concurrently
+--concurrent-fragments 1
+
+# Abort the command if any fragment being downloaded is unavailable
+--abort-on-unavailable-fragments
+
 # Log full debugging output
 --verbose
 
@@ -78,21 +105,4 @@
 # See "https://github.com/yt-dlp/yt-dlp/#network-options" for a list of supported clients
 --impersonate "firefox-135"
 
---concurrent-fragments 1
-
---abort-on-unavailable-fragments
-
---write-playlist-metafiles
-
---no-continue
-
---no-ignore-no-formats-error
-
---no-video-multistreams
-
---no-audio-multistreams
-
---no-prefer-free-formats
-
---no-write-auto-subs
 
